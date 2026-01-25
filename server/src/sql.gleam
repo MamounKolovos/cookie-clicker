@@ -54,7 +54,7 @@ pub fn insert_user(
     ))
   }
 
-  "insert into users(name, email, password_hash)
+  "insert into users(email, name, password_hash)
 values ($1, $2, $3)
 returning *;"
   |> pog.query

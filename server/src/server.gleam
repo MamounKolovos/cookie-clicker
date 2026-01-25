@@ -1,8 +1,13 @@
 import envoy
 import gleam/erlang/process
 import gleam/io
+import mist
 import pog
+import router
 import sql
+import web.{Context}
+import wisp
+import wisp/wisp_mist
 
 pub fn new_conn() -> pog.Connection {
   let assert Ok(url) = envoy.get("DATABASE_URL")
@@ -15,12 +20,18 @@ pub fn new_conn() -> pog.Connection {
 }
 
 pub fn main() -> Nil {
-  let conn = new_conn()
+  wisp.configure_logger()
 
-  let assert Ok(user) =
-    sql.insert_user(conn, "Mamoun", "mamoun.kolovos@gmail.com", "passhash")
+  let assert Ok(secret_key_base) = envoy.get("SECRET_KEY_BASE")
 
-  echo user
+  let ctx = Context(new_conn())
 
-  Nil
+  let assert Ok(_) =
+    router.handle_request(_, ctx)
+    |> wisp_mist.handler(secret_key_base)
+    |> mist.new()
+    |> mist.port(8000)
+    |> mist.start()
+
+  process.sleep_forever()
 }

@@ -29,7 +29,6 @@ type Model {
 }
 
 fn init(_args) -> #(Model, Effect(Msg)) {
-  echo "got to init"
   #(SignupPage(signup_form()), effect.none())
 }
 

@@ -1,3 +1,5 @@
+-- migrate:up
+
 CREATE EXTENSION IF NOT EXISTS citext;
 
 CREATE TABLE users (
@@ -21,3 +23,10 @@ create trigger users_updated_at
   before update on users
   for each row
   execute procedure update_updated_at();
+
+-- migrate:down
+
+DROP TRIGGER IF EXISTS users_updated_at ON users;
+DROP FUNCTION IF EXISTS update_updated_at();
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS citext;

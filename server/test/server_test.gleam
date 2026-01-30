@@ -53,6 +53,38 @@ pub fn insert_user_test() {
     updated_at: _,
   ) = insert_user_row
 }
+
+pub fn insert_user_duplicate_email_test() {
+  use conn <- with_connection()
+
+  let assert Ok(_) =
+    sql.insert_user(conn, "example@gmail.com", "example", "password123")
+
+  let assert Error(pog.ConstraintViolated(
+    message: _,
+    constraint: "users_email_key",
+    detail: _,
+  )) =
+    sql.insert_user(
+      conn,
+      "example@gmail.com",
+      "different_username",
+      "password123",
+    )
+}
+
+pub fn insert_user_duplicate_username_test() {
+  use conn <- with_connection()
+
+  let assert Ok(_) =
+    sql.insert_user(conn, "example@gmail.com", "example", "password123")
+  let assert Error(pog.ConstraintViolated(
+    message: _,
+    constraint: "users_username_key",
+    detail: _,
+  )) =
+    sql.insert_user(conn, "different_email@gmail.com", "example", "password123")
+}
 // pub fn signup_user_test() {
 //   let body = [
 //     #("email", "example@gmail.com"),

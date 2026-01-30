@@ -109,6 +109,14 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (username);
+
+
+--
 -- Name: users users_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -128,4 +136,5 @@ CREATE TRIGGER users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECU
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('20260130021931'),
-    ('20260130040157');
+    ('20260130040157'),
+    ('20260130042327');

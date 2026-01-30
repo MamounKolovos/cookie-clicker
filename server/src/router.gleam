@@ -121,19 +121,21 @@ fn api_error_to_json(api_error: shared.ApiError) -> Json {
   ])
 }
 
-fn user_to_json(user: shared.User) -> Json {
-  let shared.User(id:, email:, username:, created_at:, updated_at:) = user
-  json.object([
-    #("id", json.int(id)),
-    #("email", json.string(email)),
-    #("username", json.string(username)),
-    #("created_at", timestamp_to_json(created_at)),
-    #("updated_at", timestamp_to_json(updated_at)),
-  ])
+type User {
+  User(
+    id: Int,
+    email: String,
+    username: String,
+    created_at: Timestamp,
+    updated_at: Timestamp,
+  )
 }
 
-fn timestamp_to_json(timestamp: Timestamp) -> Json {
-  timestamp |> timestamp.to_unix_seconds |> json.float
+fn user_to_json(user: User) -> Json {
+  json.object([
+    #("id", json.int(user.id)),
+    #("username", json.string(user.username)),
+  ])
 }
 
 fn signup_form() -> Form(shared.Signup) {
@@ -154,8 +156,8 @@ fn signup_form() -> Form(shared.Signup) {
   })
 }
 
-fn insert_user_row_to_user(row: sql.InsertUserRow) -> shared.User {
-  shared.User(
+fn insert_user_row_to_user(row: sql.InsertUserRow) -> User {
+  User(
     id: row.id,
     email: row.email,
     username: row.username,

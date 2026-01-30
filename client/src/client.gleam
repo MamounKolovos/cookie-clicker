@@ -4,6 +4,7 @@ import gleam/float
 import gleam/http
 import gleam/http/request
 import gleam/http/response
+import gleam/int
 import gleam/json.{type Json}
 import gleam/list
 import gleam/result
@@ -46,9 +47,13 @@ type AuthInput {
   LoginInput(username: String, password: String)
 }
 
+type User {
+  User(id: Int, username: String)
+}
+
 type Model {
   AuthPage(mode: AuthMode, form: Form(AuthInput))
-  MainPage(data: shared.User)
+  MainPage(data: User)
 }
 
 fn init(_args) -> #(Model, Effect(Msg)) {
@@ -98,7 +103,7 @@ fn signup_form() -> Form(AuthInput) {
 type Msg {
   UserToggledAuthMode(AuthMode)
   UserSubmittedAuthInput(Result(AuthInput, Form(AuthInput)))
-  ApiReturnedUser(Result(shared.User, Error))
+  ApiReturnedUser(Result(User, Error))
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -171,18 +176,10 @@ fn expect_json(
   handler(response)
 }
 
-pub fn user_decoder() -> decode.Decoder(shared.User) {
+fn user_decoder() -> decode.Decoder(User) {
   use id <- decode.field("id", decode.int)
-  use email <- decode.field("email", decode.string)
   use username <- decode.field("username", decode.string)
-  use created_at <- decode.field("created_at", timestamp_decoder())
-  use updated_at <- decode.field("updated_at", timestamp_decoder())
-  decode.success(shared.User(id:, email:, username:, created_at:, updated_at:))
-}
-
-fn timestamp_decoder() -> decode.Decoder(Timestamp) {
-  use value <- decode.then(decode.float)
-  value |> float.round |> timestamp.from_unix_seconds |> decode.success
+  decode.success(User(id:, username:))
 }
 
 fn api_error_decoder() -> decode.Decoder(shared.ApiError) {
@@ -206,7 +203,15 @@ fn api_error_code_decoder() -> decode.Decoder(shared.ApiErrorCode) {
 fn view(model: Model) -> Element(Msg) {
   case model {
     AuthPage(mode:, form:) -> auth_page_view(mode, form)
-    MainPage(_) -> html.text("successful sign in!")
+    MainPage(data:) ->
+      html.text(
+        "successful sign in! "
+        <> "id: "
+        <> int.to_string(data.id)
+        <> ", "
+        <> "username: "
+        <> data.username,
+      )
   }
 }
 

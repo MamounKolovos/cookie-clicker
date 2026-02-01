@@ -28,7 +28,7 @@ type SignupError {
   // HashFailure(argus.HashError)
   InvalidQuery(pog.QueryError)
   UnexpectedQueryResult
-  InvalidForm(Form(shared.Signup))
+  InvalidForm(Form(Signup))
 }
 
 fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
@@ -177,7 +177,11 @@ fn user_to_json(user: User) -> Json {
   ])
 }
 
-fn signup_form() -> Form(shared.Signup) {
+pub type Signup {
+  Signup(email: String, username: String, password: String)
+}
+
+fn signup_form() -> Form(Signup) {
   form.new({
     use email <- form.field("email", form.parse_email)
     use username <- form.field(
@@ -191,7 +195,7 @@ fn signup_form() -> Form(shared.Signup) {
         |> form.check_string_length_more_than(8),
     )
 
-    form.success(shared.Signup(email:, username:, password:))
+    form.success(Signup(email:, username:, password:))
   })
 }
 

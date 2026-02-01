@@ -1,15 +1,20 @@
 import argus
 import formal/form.{type Form}
 import gleam/crypto
+import gleam/float
 import gleam/json.{type Json}
 import gleam/list
 import gleam/result
+import gleam/time/duration.{type Duration}
 import gleam/time/timestamp.{type Timestamp}
 import pog
 import shared
 import sql
 import web.{type Context}
 import wisp.{type Request, type Response}
+import youid/uuid
+
+const session_duration_seconds = 3600
 
 pub fn handle_request(request: Request, ctx: Context) -> Response {
   use request <- web.middleware(request)
@@ -17,8 +22,6 @@ pub fn handle_request(request: Request, ctx: Context) -> Response {
     ["api", "signup"] -> signup(request, ctx)
     _ -> wisp.not_found()
   }
-  // let body = "<h1>hi from server</h1>"
-  // wisp.html_response(body, 200)
 }
 
 type SignupError {
@@ -49,33 +52,69 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
       //   )
       //   |> result.map_error(InvalidQuery),
       // )
-      use returned <- result.try(
-        sql.insert_user(
-          ctx.db,
-          signup.email,
-          signup.username,
-          // TEMPORARY until jargon adds windows support
-          signup.password,
-        )
-        |> result.map_error(InvalidQuery),
+      use insert_user_row <- result.try(
+        // TEMPORARY until jargon adds windows support
+        sql.insert_user(ctx.db, signup.email, signup.username, signup.password)
+        |> one,
       )
 
-      use insert_user_row <- result.try(
-        list.first(returned.rows) |> result.replace_error(UnexpectedQueryResult),
-      )
       let user = insert_user_row_to_user(insert_user_row)
 
-      Ok(user)
+      let expires_at =
+        timestamp.add(
+          timestamp.system_time(),
+          duration.seconds(session_duration_seconds),
+        )
+
+      let session_token = uuid.v4()
+      let token_hash =
+        session_token |> uuid.to_bit_array |> crypto.hash(crypto.Sha256, _)
+
+      use _ <- result.try(
+        sql.insert_session(ctx.db, token_hash, user.id, expires_at)
+        |> zero,
+      )
+
+      Ok(#(user, session_token))
     }
     Error(form) -> Error(InvalidForm(form))
   }
 
   case result {
-    Ok(user) ->
-      user |> user_to_json |> json.to_string |> wisp.json_response(201)
+    Ok(#(user, session_token)) ->
+      user
+      |> user_to_json
+      |> json.to_string
+      |> wisp.json_response(201)
+      |> wisp.set_cookie(
+        request,
+        name: "session",
+        value: uuid.to_string(session_token),
+        security: wisp.PlainText,
+        max_age: session_duration_seconds,
+      )
     Error(InvalidQuery(error)) -> internal_error()
     Error(UnexpectedQueryResult) -> internal_error()
     Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
+  }
+}
+
+fn one(
+  query_result: Result(pog.Returned(row), pog.QueryError),
+) -> Result(row, SignupError) {
+  use returned <- result.try(query_result |> result.map_error(InvalidQuery))
+  use row <- result.try(
+    returned.rows |> list.first |> result.replace_error(UnexpectedQueryResult),
+  )
+  Ok(row)
+}
+
+fn zero(
+  query_result: Result(pog.Returned(Nil), pog.QueryError),
+) -> Result(Nil, SignupError) {
+  case query_result {
+    Ok(_) -> Ok(Nil)
+    Error(error) -> Error(InvalidQuery(error))
   }
 }
 

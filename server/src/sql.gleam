@@ -8,6 +8,30 @@ import gleam/dynamic/decode
 import gleam/time/timestamp.{type Timestamp}
 import pog
 
+/// Runs the `insert_session` query
+/// defined in `./src/sql/insert_session.sql`.
+///
+/// > 🐿️ This function was generated automatically using v4.6.0 of
+/// > the [squirrel package](https://github.com/giacomocavalieri/squirrel).
+///
+pub fn insert_session(
+  db: pog.Connection,
+  arg_1: BitArray,
+  arg_2: Int,
+  arg_3: Timestamp,
+) -> Result(pog.Returned(Nil), pog.QueryError) {
+  let decoder = decode.map(decode.dynamic, fn(_) { Nil })
+
+  "INSERT INTO sessions(token_hash, user_id, expires_at)
+VALUES ($1, $2, $3)"
+  |> pog.query
+  |> pog.parameter(pog.bytea(arg_1))
+  |> pog.parameter(pog.int(arg_2))
+  |> pog.parameter(pog.timestamp(arg_3))
+  |> pog.returning(decoder)
+  |> pog.execute(db)
+}
+
 /// A row you get from running the `insert_user` query
 /// defined in `./src/sql/insert_user.sql`.
 ///

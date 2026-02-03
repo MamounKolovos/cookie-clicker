@@ -7,7 +7,7 @@ import gleam/http/response
 import gleam/int
 import gleam/json.{type Json}
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/time/timestamp.{type Timestamp}
@@ -48,12 +48,12 @@ type User {
 }
 
 type Model {
-  Model(route: Route, page: Page, shared: Shared)
+  Model(route: Route, page: Page)
 }
 
 type Page {
   AuthPage(form: Form(AuthInput))
-  MainPage(data: User)
+  ProfilePage(data: Option(User))
 }
 
 type Route {
@@ -71,17 +71,42 @@ type Shared {
 }
 
 fn init(_args) -> #(Model, Effect(Msg)) {
-  #(
-    Model(
-      route: Auth(Signup),
-      page: AuthPage(form: signup_form()),
-      shared: Shared,
-    ),
-    effect.batch([
-      modem.replace("/signup", None, None),
+  let route =
+    modem.initial_uri()
+    |> result.map(fn(uri) { uri.path_segments(uri.path) })
+    |> fn(path) {
+      case path {
+        Ok(["signup"]) -> Auth(Signup)
+        Ok(["login"]) -> Auth(Login)
+        Ok(["profile"]) -> Profile
+        _ -> Auth(Signup)
+      }
+    }
+
+  case route {
+    Auth(Signup) -> #(
+      Model(route:, page: AuthPage(signup_form())),
       modem.init(on_url_change),
-    ]),
-  )
+    )
+    Auth(Login) -> #(
+      Model(route:, page: AuthPage(login_form())),
+      modem.init(on_url_change),
+    )
+    Profile -> #(
+      Model(route:, page: ProfilePage(None)),
+      effect.batch([
+        modem.init(on_url_change),
+        get_profile(),
+      ]),
+    )
+  }
+  // #(
+  //   Model(route:, page: AuthPage(form: signup_form())),
+  //   effect.batch([
+  //     modem.replace("/signup", None, None),
+  //     modem.init(on_url_change),
+  //   ]),
+  // )
 }
 
 fn on_url_change(uri: Uri) -> Msg {
@@ -144,11 +169,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     OnRouteChange(route) ->
       case route {
         Auth(Signup) -> #(
-          Model(..model, route:, page: AuthPage(signup_form())),
+          Model(route:, page: AuthPage(signup_form())),
           effect.none(),
         )
         Auth(Login) -> #(
-          Model(..model, route:, page: AuthPage(login_form())),
+          Model(route:, page: AuthPage(login_form())),
           effect.none(),
         )
         _ -> #(Model(..model, route:), effect.none())
@@ -161,11 +186,25 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
     ApiReturnedUser(result) ->
       case result {
-        Ok(user) -> #(Model(..model, page: MainPage(user)), effect.none())
+        Ok(user) -> {
+          #(
+            Model(route: Profile, page: ProfilePage(Some(user))),
+            modem.replace("/profile", None, None),
+          )
+        }
+        Error(ApiFailure(shared.ApiError(code: shared.Unauthorized, message: _))) -> #(
+          Model(route: Auth(Signup), page: AuthPage(signup_form())),
+          modem.replace("/signup", None, None),
+        )
         // add error to model to render
         Error(_) -> #(model, effect.none())
       }
   }
+}
+
+fn get_profile() -> Effect(Msg) {
+  let handler = expect_json(user_decoder(), ApiReturnedUser)
+  rsvp.get("/api/me", handler)
 }
 
 fn submit_auth(input: AuthInput) -> Effect(Msg) {
@@ -232,7 +271,7 @@ fn api_error_code_decoder() -> decode.Decoder(shared.ApiErrorCode) {
   case variant {
     "INVALID_FORM" -> decode.success(shared.InvalidFormCode)
     "INTERNAL_ERROR" -> decode.success(shared.InternalError)
-    // "UNAUTHORIZED" -> decode.success(shared.Unauthorized)
+    "UNAUTHORIZED" -> decode.success(shared.Unauthorized)
     _ -> decode.failure(shared.InternalError, "ApiErrorCode")
   }
 }
@@ -240,12 +279,15 @@ fn api_error_code_decoder() -> decode.Decoder(shared.ApiErrorCode) {
 fn view(model: Model) -> Element(Msg) {
   case model.route, model.page {
     Auth(route), AuthPage(form:) -> auth_page_view(route, form)
-    Profile, MainPage(data:) -> profile_page_view(data)
-    _, _ -> html.text("not found :9")
+    Profile, ProfilePage(data:) -> profile_page_view(data)
+    _, _ -> {
+      echo model
+      html.text("not found :9")
+    }
   }
 }
 
-fn profile_page_view(user: User) -> Element(Msg) {
+fn profile_page_view(user: Option(User)) -> Element(Msg) {
   html.button([], [element.text("Profile")])
 }
 

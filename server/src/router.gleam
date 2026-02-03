@@ -1,5 +1,6 @@
 import argus
 import formal/form.{type Form}
+import gleam/bit_array
 import gleam/crypto
 import gleam/float
 import gleam/json.{type Json}
@@ -20,15 +21,72 @@ pub fn handle_request(request: Request, ctx: Context) -> Response {
   use request <- web.middleware(request)
   case wisp.path_segments(request) {
     ["api", "signup"] -> signup(request, ctx)
+    ["api", "me"] -> me(request, ctx)
     _ -> wisp.not_found()
   }
 }
 
-type Error {
+fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
+  let result = {
+    use session_token_string <- result.try(
+      request
+      |> wisp.get_cookie("session", wisp.PlainText)
+      |> result.replace_error(InvalidSession("no session present in cookies")),
+    )
+
+    use session_token <- result.try(
+      session_token_string
+      |> uuid.from_string
+      |> result.replace_error(InvalidSession(
+        "session cookie is not a valid uuid",
+      )),
+    )
+
+    let token_hash =
+      session_token |> uuid.to_bit_array |> crypto.hash(crypto.Sha256, _)
+
+    use returned <- result.try(
+      sql.select_user_by_session(ctx.db, token_hash, timestamp.system_time())
+      |> result.map_error(InvalidQuery),
+    )
+
+    use row <- result.try(case returned.rows {
+      [row] -> Ok(row)
+      _ -> Error(InvalidSession("session expired or session not found"))
+    })
+
+    let user = select_user_by_session_row_to_user(row)
+
+    Ok(user)
+  }
+
+  case result {
+    Ok(user) ->
+      user |> user_to_json |> json.to_string |> wisp.json_response(200)
+    Error(InvalidSession(reason:)) -> {
+      wisp.log_error(reason)
+      unauthorized()
+    }
+    Error(_) -> internal_error()
+  }
+}
+
+fn select_user_by_session_row_to_user(row: sql.SelectUserBySessionRow) -> User {
+  User(
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  )
+}
+
+pub type Error {
   // HashFailure(argus.HashError)
   InvalidQuery(pog.QueryError)
   UnexpectedQueryResult
   InvalidForm(Form(Signup))
+  InvalidSession(reason: String)
 }
 
 fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
@@ -96,10 +154,11 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
     Error(InvalidQuery(error)) -> internal_error()
     Error(UnexpectedQueryResult) -> internal_error()
     Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
+    Error(_) -> internal_error()
   }
 }
 
-fn one(
+pub fn one(
   query_result: Result(pog.Returned(row), pog.QueryError),
 ) -> Result(row, Error) {
   use returned <- result.try(query_result |> result.map_error(InvalidQuery))
@@ -109,7 +168,7 @@ fn one(
   }
 }
 
-fn zero(
+pub fn zero(
   query_result: Result(pog.Returned(Nil), pog.QueryError),
 ) -> Result(Nil, Error) {
   case query_result {
@@ -122,6 +181,7 @@ fn api_error_code_to_json(code: shared.ApiErrorCode) -> Json {
   case code {
     shared.InvalidFormCode -> "INVALID_FORM"
     shared.InternalError -> "INTERNAL_ERROR"
+    shared.Unauthorized -> "UNAUTHORIZED"
   }
   |> json.string
 }
@@ -130,6 +190,7 @@ fn api_error_code_status(code: shared.ApiErrorCode) -> Int {
   case code {
     shared.InvalidFormCode -> 400
     shared.InternalError -> 500
+    shared.Unauthorized -> 401
   }
 }
 
@@ -140,6 +201,11 @@ fn invalid_form(message: String) -> Response {
 
 fn internal_error() -> Response {
   shared.ApiError(code: shared.InternalError, message: "Internal server error")
+  |> api_error_response
+}
+
+fn unauthorized() -> Response {
+  shared.ApiError(code: shared.Unauthorized, message: "Not authenticated")
   |> api_error_response
 }
 
@@ -160,7 +226,7 @@ fn api_error_to_json(api_error: shared.ApiError) -> Json {
   ])
 }
 
-type User {
+pub type User {
   User(
     id: Int,
     email: String,
@@ -199,7 +265,7 @@ fn signup_form() -> Form(Signup) {
   })
 }
 
-fn insert_user_row_to_user(row: sql.InsertUserRow) -> User {
+pub fn insert_user_row_to_user(row: sql.InsertUserRow) -> User {
   User(
     id: row.id,
     email: row.email,

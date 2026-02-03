@@ -85,3 +85,57 @@ returning id, email, username, created_at, updated_at"
   |> pog.returning(decoder)
   |> pog.execute(db)
 }
+
+/// A row you get from running the `select_user_by_session` query
+/// defined in `./src/sql/select_user_by_session.sql`.
+///
+/// > 🐿️ This type definition was generated automatically using v4.6.0 of the
+/// > [squirrel package](https://github.com/giacomocavalieri/squirrel).
+///
+pub type SelectUserBySessionRow {
+  SelectUserBySessionRow(
+    id: Int,
+    email: String,
+    username: String,
+    created_at: Timestamp,
+    updated_at: Timestamp,
+  )
+}
+
+/// Runs the `select_user_by_session` query
+/// defined in `./src/sql/select_user_by_session.sql`.
+///
+/// > 🐿️ This function was generated automatically using v4.6.0 of
+/// > the [squirrel package](https://github.com/giacomocavalieri/squirrel).
+///
+pub fn select_user_by_session(
+  db: pog.Connection,
+  arg_1: BitArray,
+  arg_2: Timestamp,
+) -> Result(pog.Returned(SelectUserBySessionRow), pog.QueryError) {
+  let decoder = {
+    use id <- decode.field(0, decode.int)
+    use email <- decode.field(1, decode.string)
+    use username <- decode.field(2, decode.string)
+    use created_at <- decode.field(3, pog.timestamp_decoder())
+    use updated_at <- decode.field(4, pog.timestamp_decoder())
+    decode.success(SelectUserBySessionRow(
+      id:,
+      email:,
+      username:,
+      created_at:,
+      updated_at:,
+    ))
+  }
+
+  "SELECT u.id, u.email, u.username, u.created_at, u.updated_at
+FROM sessions session
+JOIN users u ON session.user_id = u.id
+WHERE session.token_hash = $1
+  AND session.expires_at > $2;"
+  |> pog.query
+  |> pog.parameter(pog.bytea(arg_1))
+  |> pog.parameter(pog.timestamp(arg_2))
+  |> pog.returning(decoder)
+  |> pog.execute(db)
+}

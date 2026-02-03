@@ -1,7 +1,9 @@
 import argus
+import error.{type Error}
 import formal/form.{type Form}
 import gleam/bit_array
 import gleam/crypto
+import gleam/dynamic/decode
 import gleam/float
 import gleam/json.{type Json}
 import gleam/list
@@ -31,13 +33,15 @@ fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
     use session_token_string <- result.try(
       request
       |> wisp.get_cookie("session", wisp.PlainText)
-      |> result.replace_error(InvalidSession("no session present in cookies")),
+      |> result.replace_error(error.InvalidSession(
+        "no session present in cookies",
+      )),
     )
 
     use session_token <- result.try(
       session_token_string
       |> uuid.from_string
-      |> result.replace_error(InvalidSession(
+      |> result.replace_error(error.InvalidSession(
         "session cookie is not a valid uuid",
       )),
     )
@@ -47,12 +51,12 @@ fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
 
     use returned <- result.try(
       sql.select_user_by_session(ctx.db, token_hash, timestamp.system_time())
-      |> result.map_error(InvalidQuery),
+      |> result.map_error(error.InvalidQuery),
     )
 
     use row <- result.try(case returned.rows {
       [row] -> Ok(row)
-      _ -> Error(InvalidSession("session expired or session not found"))
+      _ -> Error(error.InvalidSession("session expired or session not found"))
     })
 
     let user = select_user_by_session_row_to_user(row)
@@ -63,7 +67,7 @@ fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
   case result {
     Ok(user) ->
       user |> user_to_json |> json.to_string |> wisp.json_response(200)
-    Error(InvalidSession(reason:)) -> {
+    Error(error.InvalidSession(reason:)) -> {
       wisp.log_error(reason)
       unauthorized()
     }
@@ -79,14 +83,6 @@ fn select_user_by_session_row_to_user(row: sql.SelectUserBySessionRow) -> User {
     created_at: row.created_at,
     updated_at: row.updated_at,
   )
-}
-
-pub type Error {
-  // HashFailure(argus.HashError)
-  InvalidQuery(pog.QueryError)
-  UnexpectedQueryResult
-  InvalidForm(Form(Signup))
-  InvalidSession(reason: String)
 }
 
 fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
@@ -135,7 +131,7 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
 
       Ok(#(user, session_token))
     }
-    Error(form) -> Error(InvalidForm(form))
+    Error(form) -> Error(error.InvalidForm(form))
   }
 
   case result {
@@ -151,29 +147,31 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
         security: wisp.PlainText,
         max_age: session_duration_seconds,
       )
-    Error(InvalidQuery(error)) -> internal_error()
-    Error(UnexpectedQueryResult) -> internal_error()
-    Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
+    Error(error.InvalidQuery(error)) -> internal_error()
+    Error(error.UnexpectedQueryResult) -> internal_error()
+    Error(error.InvalidForm(form)) -> invalid_form("Some fields are invalid")
     Error(_) -> internal_error()
   }
 }
 
 pub fn one(
   query_result: Result(pog.Returned(row), pog.QueryError),
-) -> Result(row, Error) {
-  use returned <- result.try(query_result |> result.map_error(InvalidQuery))
+) -> Result(row, Error(f)) {
+  use returned <- result.try(
+    query_result |> result.map_error(error.InvalidQuery),
+  )
   case returned.rows {
     [row] -> Ok(row)
-    _ -> Error(UnexpectedQueryResult)
+    _ -> Error(error.UnexpectedQueryResult)
   }
 }
 
 pub fn zero(
   query_result: Result(pog.Returned(Nil), pog.QueryError),
-) -> Result(Nil, Error) {
+) -> Result(Nil, Error(f)) {
   case query_result {
     Ok(_) -> Ok(Nil)
-    Error(error) -> Error(InvalidQuery(error))
+    Error(error) -> Error(error.InvalidQuery(error))
   }
 }
 

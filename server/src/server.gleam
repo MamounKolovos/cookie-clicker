@@ -3,9 +3,9 @@ import gleam/erlang/process
 import gleam/io
 import mist
 import pog
-import router
-import sql
-import web.{Context}
+import server/router
+import server/sql
+import server/web.{Context}
 import wisp
 import wisp/wisp_mist
 

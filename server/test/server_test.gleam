@@ -5,10 +5,10 @@ import gleam/uri
 import gleeunit
 import global_value
 import pog
-import router
 import server
-import sql
-import web.{type Context, Context}
+import server/router
+import server/sql
+import server/web.{type Context, Context}
 import wisp/simulate
 
 pub fn main() -> Nil {

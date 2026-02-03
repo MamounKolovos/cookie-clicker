@@ -1,5 +1,4 @@
 import argus
-import error.{type Error}
 import formal/form.{type Form}
 import gleam/bit_array
 import gleam/crypto
@@ -11,9 +10,10 @@ import gleam/result
 import gleam/time/duration.{type Duration}
 import gleam/time/timestamp.{type Timestamp}
 import pog
+import server/error.{type Error}
+import server/sql
+import server/web.{type Context}
 import shared
-import sql
-import web.{type Context}
 import wisp.{type Request, type Response}
 import youid/uuid
 

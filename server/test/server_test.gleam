@@ -131,26 +131,6 @@ pub fn session_expired_test() {
       now: timestamp.add(timestamp.system_time(), duration.seconds(50)),
     )
 }
-
-pub fn session_expired1_test() {
-  use conn <- with_connection()
-
-  let assert Ok(#(_, session_token)) =
-    auth.signup(
-      conn,
-      email: "example@gmail.com",
-      username: "example",
-      password: "password123",
-      session_expires_in: duration.seconds(10),
-    )
-
-  let assert Error(error.InvalidSession(reason: _)) =
-    auth.authenticate(
-      conn,
-      session_token: session_token,
-      now: timestamp.add(timestamp.system_time(), duration.seconds(50)),
-    )
-}
 // pub fn signup_user_test() {
 //   let body = [
 //     #("email", "example@gmail.com"),

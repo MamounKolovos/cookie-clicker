@@ -27,15 +27,8 @@ pub fn select_user_by_session(
   db db: pog.Connection,
   token_hash token_hash: BitArray,
   now now: Timestamp,
-) -> Result(sql.SelectUserBySessionRow, Error(f)) {
-  use option <- result.try(
-    sql.select_user_by_session(db, token_hash, now) |> maybe_one,
-  )
-
-  case option {
-    Some(row) -> Ok(row)
-    None -> Error(error.InvalidSession("session expired or session not found"))
-  }
+) -> Result(Option(sql.SelectUserBySessionRow), Error(f)) {
+  sql.select_user_by_session(db, token_hash, now) |> maybe_one
 }
 
 pub fn select_user_by_username(

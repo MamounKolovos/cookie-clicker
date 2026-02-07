@@ -21,8 +21,12 @@ pub fn authenticate(
     |> uuid.to_bit_array
     |> crypto.hash(crypto.Sha256, _)
 
-  database.select_user_by_session(db, token_hash: token_hash, now: now)
-  |> result.map(user.from_select_user_by_session_row)
+  case database.select_user_by_session(db, token_hash: token_hash, now: now) {
+    Ok(Some(row)) -> row |> user.from_select_user_by_session_row |> Ok
+    Ok(None) ->
+      Error(error.InvalidSession("session expired or session not found"))
+    Error(error) -> Error(error)
+  }
 }
 
 pub fn signup(

@@ -11,7 +11,6 @@ import pog
 import server
 import server/auth
 import server/router
-import server/sql
 import server/web.{type Context, Context}
 import wisp/simulate
 
@@ -36,54 +35,55 @@ fn with_connection(test_case: fn(pog.Connection) -> a) -> Nil {
   Nil
 }
 
-pub fn insert_user_test() {
-  use conn <- with_connection()
-
-  let assert Ok(returned) =
-    sql.insert_user(conn, "example@gmail.com", "example", "password123")
-  let assert [insert_user_row] = returned.rows
-  let assert sql.InsertUserRow(
-    id: _,
-    email: "example@gmail.com",
-    username: "example",
-    created_at: _,
-    updated_at: _,
-  ) = insert_user_row
-}
-
-pub fn insert_user_duplicate_email_test() {
+pub fn signup_with_duplicate_email_test() {
   use conn <- with_connection()
 
   let assert Ok(_) =
-    sql.insert_user(conn, "example@gmail.com", "example", "password123")
-
-  let assert Error(pog.ConstraintViolated(
-    message: _,
-    constraint: "users_email_key",
-    detail: _,
-  )) =
-    sql.insert_user(
+    auth.signup(
       conn,
-      "example@gmail.com",
-      "different_username",
-      "password123",
+      email: "example@gmail.com",
+      username: "example",
+      password: "password123",
+      session_expires_in: duration.seconds(10),
+      now: timestamp.system_time(),
+    )
+
+  let assert Error(auth.EmailAlreadyExists) =
+    auth.signup(
+      conn,
+      email: "example@gmail.com",
+      username: "different_username",
+      password: "password123",
+      session_expires_in: duration.seconds(10),
+      now: timestamp.system_time(),
     )
 }
 
-pub fn insert_user_duplicate_username_test() {
+pub fn signup_with_duplicate_username_test() {
   use conn <- with_connection()
 
   let assert Ok(_) =
-    sql.insert_user(conn, "example@gmail.com", "example", "password123")
-  let assert Error(pog.ConstraintViolated(
-    message: _,
-    constraint: "users_username_key",
-    detail: _,
-  )) =
-    sql.insert_user(conn, "different_email@gmail.com", "example", "password123")
+    auth.signup(
+      conn,
+      email: "example@gmail.com",
+      username: "example",
+      password: "password123",
+      session_expires_in: duration.seconds(10),
+      now: timestamp.system_time(),
+    )
+
+  let assert Error(auth.UsernameAlreadyExists) =
+    auth.signup(
+      conn,
+      email: "different_email@gmail.com",
+      username: "example",
+      password: "password123",
+      session_expires_in: duration.seconds(10),
+      now: timestamp.system_time(),
+    )
 }
 
-pub fn signup_test() {
+pub fn session_valid_test() {
   use conn <- with_connection()
 
   let assert Ok(#(created_user, session_token)) =

@@ -3,7 +3,6 @@ import gleam/result
 import gleam/time/timestamp.{type Timestamp}
 import pog
 import server/database
-import server/error.{type Error}
 import server/sql
 
 pub type User {
@@ -28,7 +27,7 @@ pub fn insert(
   email email: String,
   username username: String,
   password_hash password_hash: String,
-) -> Result(User, Error(f)) {
+) -> Result(User, database.Error) {
   database.insert_user(db, email, username, password_hash)
   |> result.map(from_insert_user_row)
 }

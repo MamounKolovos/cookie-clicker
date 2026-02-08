@@ -12,7 +12,6 @@ import gleam/time/duration.{type Duration}
 import gleam/time/timestamp.{type Timestamp}
 import pog
 import server/auth
-import server/error.{type Error}
 import server/sql
 import server/user
 import server/web.{type Context}
@@ -21,6 +20,12 @@ import wisp.{type Request, type Response}
 import youid/uuid
 
 const session_duration_seconds = 3600
+
+type Error(f) {
+  InvalidForm(Form(f))
+  AuthError(auth.Error)
+  SessionParsingFailed
+}
 
 pub fn handle_request(request: Request, ctx: Context) -> Response {
   use request <- web.middleware(request)
@@ -37,17 +42,13 @@ fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
     use session_token_string <- result.try(
       request
       |> wisp.get_cookie("session", wisp.PlainText)
-      |> result.replace_error(error.InvalidSession(
-        "no session present in cookies",
-      )),
+      |> result.replace_error(SessionParsingFailed),
     )
 
     use session_token <- result.try(
       session_token_string
       |> uuid.from_string
-      |> result.replace_error(error.InvalidSession(
-        "session cookie is not a valid uuid",
-      )),
+      |> result.replace_error(SessionParsingFailed),
     )
 
     auth.authenticate(
@@ -55,15 +56,14 @@ fn me(request: wisp.Request, ctx: Context) -> wisp.Response {
       session_token: session_token,
       now: timestamp.system_time(),
     )
+    |> result.map_error(AuthError)
   }
 
   case result {
     Ok(user) ->
       user |> user.to_json |> json.to_string |> wisp.json_response(200)
-    Error(error.InvalidSession(reason:)) -> {
-      wisp.log_error(reason)
-      unauthorized()
-    }
+    Error(SessionParsingFailed) -> unauthorized()
+
     Error(_) -> internal_error()
   }
 }
@@ -97,7 +97,7 @@ fn login(request: wisp.Request, ctx: Context) -> wisp.Response {
 
           case result {
             Ok(result) -> Ok(result)
-            Error(error.InvalidSession(_)) ->
+            Error(auth.InvalidSession) ->
               auth.login_with_credentials(
                 ctx.db,
                 username: login_data.username,
@@ -105,7 +105,8 @@ fn login(request: wisp.Request, ctx: Context) -> wisp.Response {
                 session_expires_in: session_duration,
                 now: now,
               )
-            Error(error) -> Error(error)
+              |> result.map_error(AuthError)
+            Error(error) -> Error(AuthError(error))
           }
         }
         None ->
@@ -116,9 +117,10 @@ fn login(request: wisp.Request, ctx: Context) -> wisp.Response {
             session_expires_in: session_duration,
             now: now,
           )
+          |> result.map_error(AuthError)
       }
     }
-    Error(form) -> Error(error.InvalidForm(form))
+    Error(form) -> Error(InvalidForm(form))
   }
 
   case result {
@@ -134,10 +136,8 @@ fn login(request: wisp.Request, ctx: Context) -> wisp.Response {
         security: wisp.PlainText,
         max_age: session_duration_seconds,
       )
-    Error(error.InvalidCredentials) -> invalid_credentials()
-    Error(error.InvalidQuery(error)) -> internal_error()
-    Error(error.UnexpectedQueryResult) -> internal_error()
-    Error(error.InvalidForm(form)) -> invalid_form("Some fields are invalid")
+    Error(AuthError(auth.InvalidCredentials)) -> invalid_credentials()
+    Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
     Error(_) -> internal_error()
   }
 }
@@ -177,8 +177,9 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
         session_expires_in: duration.seconds(session_duration_seconds),
         now: timestamp.system_time(),
       )
+      |> result.map_error(AuthError)
     }
-    Error(form) -> Error(error.InvalidForm(form))
+    Error(form) -> Error(InvalidForm(form))
   }
 
   case result {
@@ -194,9 +195,7 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
         security: wisp.PlainText,
         max_age: session_duration_seconds,
       )
-    Error(error.InvalidQuery(error)) -> internal_error()
-    Error(error.UnexpectedQueryResult) -> internal_error()
-    Error(error.InvalidForm(form)) -> invalid_form("Some fields are invalid")
+    Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
     Error(_) -> internal_error()
   }
 }

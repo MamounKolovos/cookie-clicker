@@ -10,7 +10,6 @@ import global_value
 import pog
 import server
 import server/auth
-import server/error
 import server/router
 import server/sql
 import server/web.{type Context, Context}
@@ -120,7 +119,7 @@ pub fn session_expired_test() {
       now: timestamp.system_time(),
     )
 
-  let assert Error(error.InvalidSession(reason: _)) =
+  let assert Error(auth.InvalidSession) =
     auth.authenticate(
       conn,
       session_token: session_token,
@@ -156,7 +155,7 @@ pub fn login_with_valid_session_test() {
     auth.authenticate(conn, session_token: login_session_token, now: now)
 
   // makes sure old session was fully replaced and no longer valid
-  let assert Error(error.InvalidSession(_)) =
+  let assert Error(auth.InvalidSession) =
     auth.authenticate(conn, session_token: signup_session_token, now: now)
 }
 
@@ -205,7 +204,7 @@ pub fn login_with_invalid_credentials_test() {
       now: now,
     )
 
-  let assert Error(error.InvalidCredentials) =
+  let assert Error(auth.InvalidCredentials) =
     auth.login_with_credentials(
       conn,
       username: "wrong_username",
@@ -214,7 +213,7 @@ pub fn login_with_invalid_credentials_test() {
       now: now,
     )
 
-  let assert Error(error.InvalidCredentials) =
+  let assert Error(auth.InvalidCredentials) =
     auth.login_with_credentials(
       conn,
       username: "example",

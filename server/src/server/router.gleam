@@ -196,6 +196,10 @@ fn signup(request: wisp.Request, ctx: Context) -> wisp.Response {
         max_age: session_duration_seconds,
       )
     Error(InvalidForm(form)) -> invalid_form("Some fields are invalid")
+    Error(AuthError(auth.EmailAlreadyExists)) ->
+      duplicate_identifier("Email is already in use")
+    Error(AuthError(auth.UsernameAlreadyExists)) ->
+      duplicate_identifier("Username is taken")
     Error(_) -> internal_error()
   }
 }
@@ -206,6 +210,7 @@ fn api_error_code_to_json(code: shared.ApiErrorCode) -> Json {
     shared.InternalError -> "INTERNAL_ERROR"
     shared.Unauthorized -> "UNAUTHORIZED"
     shared.InvalidCredentials -> "INVALID_CREDENTIALS"
+    shared.DuplicateIdentifier -> "DUPLICATE_IDENTIFIER"
   }
   |> json.string
 }
@@ -216,6 +221,7 @@ fn api_error_code_status(code: shared.ApiErrorCode) -> Int {
     shared.InternalError -> 500
     shared.Unauthorized -> 401
     shared.InvalidCredentials -> 401
+    shared.DuplicateIdentifier -> 409
   }
 }
 
@@ -239,6 +245,11 @@ fn invalid_credentials() -> Response {
     code: shared.InvalidCredentials,
     message: "Username or password is incorrect",
   )
+  |> api_error_response
+}
+
+fn duplicate_identifier(message: String) -> Response {
+  shared.ApiError(code: shared.DuplicateIdentifier, message: message)
   |> api_error_response
 }
 

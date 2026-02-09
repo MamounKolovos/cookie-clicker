@@ -52,7 +52,7 @@ type Model {
 }
 
 type Page {
-  AuthPage(form: Form(AuthInput))
+  AuthPage(form: Form(AuthInput), error_text: Option(String))
   ProfilePage(data: Option(User))
 }
 
@@ -85,11 +85,11 @@ fn init(_args) -> #(Model, Effect(Msg)) {
 
   case route {
     Auth(Signup) -> #(
-      Model(route:, page: AuthPage(signup_form())),
+      Model(route:, page: AuthPage(form: signup_form(), error_text: None)),
       modem.init(on_url_change),
     )
     Auth(Login) -> #(
-      Model(route:, page: AuthPage(login_form())),
+      Model(route:, page: AuthPage(form: login_form(), error_text: None)),
       modem.init(on_url_change),
     )
     Profile -> #(
@@ -169,11 +169,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     OnRouteChange(route) ->
       case route {
         Auth(Signup) -> #(
-          Model(route:, page: AuthPage(signup_form())),
+          Model(route:, page: AuthPage(form: signup_form(), error_text: None)),
           effect.none(),
         )
         Auth(Login) -> #(
-          Model(route:, page: AuthPage(login_form())),
+          Model(route:, page: AuthPage(form: login_form(), error_text: None)),
           effect.none(),
         )
         _ -> #(Model(..model, route:), effect.none())
@@ -182,7 +182,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       case result {
         // add signupsubmitting model variant to disable buttons
         Ok(input) -> #(model, submit_auth(input))
-        Error(form) -> #(Model(..model, page: AuthPage(form:)), effect.none())
+        Error(form) -> #(
+          Model(..model, page: AuthPage(form:, error_text: None)),
+          effect.none(),
+        )
       }
     ApiReturnedUser(result) ->
       case result {
@@ -192,10 +195,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             modem.replace("/profile", None, None),
           )
         }
-        Error(ApiFailure(shared.ApiError(code: shared.Unauthorized, message: _))) -> #(
-          Model(route: Auth(Signup), page: AuthPage(signup_form())),
-          modem.replace("/signup", None, None),
-        )
+        Error(ApiFailure(shared.ApiError(code: _, message:))) ->
+          case model.route {
+            Auth(Signup) -> #(
+              Model(
+                route: Auth(Signup),
+                page: AuthPage(form: signup_form(), error_text: Some(message)),
+              ),
+              effect.none(),
+            )
+            Auth(Login) -> #(
+              Model(
+                route: Auth(Login),
+                page: AuthPage(form: login_form(), error_text: Some(message)),
+              ),
+              effect.none(),
+            )
+            Profile -> #(
+              Model(
+                route: Auth(Login),
+                page: AuthPage(form: login_form(), error_text: Some(message)),
+              ),
+              effect.none(),
+            )
+          }
         // add error to model to render
         Error(_) -> #(model, effect.none())
       }
@@ -273,13 +296,15 @@ fn api_error_code_decoder() -> decode.Decoder(shared.ApiErrorCode) {
     "INTERNAL_ERROR" -> decode.success(shared.InternalError)
     "UNAUTHORIZED" -> decode.success(shared.Unauthorized)
     "INVALID_CREDENTIALS" -> decode.success(shared.InvalidCredentials)
+    "DUPLICATE_IDENTIFIER" -> decode.success(shared.DuplicateIdentifier)
     _ -> decode.failure(shared.InternalError, "ApiErrorCode")
   }
 }
 
 fn view(model: Model) -> Element(Msg) {
   case model.route, model.page {
-    Auth(route), AuthPage(form:) -> auth_page_view(route, form)
+    Auth(route), AuthPage(form:, error_text:) ->
+      auth_page_view(route, form, error_text)
     Profile, ProfilePage(data:) -> profile_page_view(data)
     _, _ -> {
       echo model
@@ -292,7 +317,11 @@ fn profile_page_view(user: Option(User)) -> Element(Msg) {
   html.button([], [element.text("Profile")])
 }
 
-fn auth_page_view(route: AuthRoute, form: Form(AuthInput)) -> Element(Msg) {
+fn auth_page_view(
+  route: AuthRoute,
+  form: Form(AuthInput),
+  error_text: Option(String),
+) -> Element(Msg) {
   let fields = case route {
     Signup -> [
       form_input_field(form, name: "email", type_: "email", label: "Email"),
@@ -335,6 +364,10 @@ fn auth_page_view(route: AuthRoute, form: Form(AuthInput)) -> Element(Msg) {
       ],
       [
         element.fragment(fields),
+        case error_text {
+          Some(error_text) -> auth_page_error_box(error_text)
+          None -> element.none()
+        },
         html.div([], [
           html.input([
             attribute.type_("submit"),
@@ -358,6 +391,23 @@ fn auth_page_view(route: AuthRoute, form: Form(AuthInput)) -> Element(Msg) {
       ],
     ),
   ])
+}
+
+fn auth_page_error_box(error_text: String) -> Element(Msg) {
+  html.div(
+    [
+      attribute.role("alert"),
+      attribute.class(
+        "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative",
+      ),
+    ],
+    [
+      html.strong([attribute.class("font-bold")], [element.text("Error!")]),
+      html.span([attribute.class("block sm:inline ml-2")], [
+        element.text(error_text),
+      ]),
+    ],
+  )
 }
 
 fn auth_mode_toggle(route: AuthRoute) -> Element(Msg) {
@@ -435,7 +485,6 @@ fn form_input_field(
     html.input([
       attribute.type_(type_),
       attribute.name(name),
-      attribute.value(form.field_value(form, name)),
       attribute.styles([
         #("display", "block"),
         #("width", "100%"),

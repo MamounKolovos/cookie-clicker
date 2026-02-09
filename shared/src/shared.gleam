@@ -3,6 +3,7 @@ pub type ApiErrorCode {
   InternalError
   Unauthorized
   InvalidCredentials
+  DuplicateIdentifier
 }
 
 pub type ApiError {

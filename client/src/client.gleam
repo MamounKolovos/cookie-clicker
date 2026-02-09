@@ -283,7 +283,14 @@ fn user_decoder() -> decode.Decoder(User) {
 fn view(model: Model) -> Element(Msg) {
   case model.route, model.page {
     Auth(route), AuthPage(form:, error_text:) ->
-      auth_page_view(route, form, error_text)
+      html.div(
+        [
+          attribute.class(
+            "min-h-screen flex justify-center items-start bg-gray-50 p-10",
+          ),
+        ],
+        [auth_page_view(route, form, error_text)],
+      )
     Profile, ProfilePage(data:) -> profile_page_view(data)
     _, _ -> {
       echo model
@@ -329,47 +336,54 @@ fn auth_page_view(
     ]
   }
 
-  html.div([], [
-    auth_mode_toggle(route),
-    html.form(
-      [
-        // prevents default submission and collects field values
-        event.on_submit(fn(fields) {
-          form
-          |> form.add_values(fields)
-          |> form.run
-          |> UserSubmittedAuthInput
-        }),
-      ],
-      [
-        element.fragment(fields),
-        case error_text {
-          Some(error_text) -> auth_page_error_box(error_text)
-          None -> element.none()
-        },
-        html.div([], [
-          html.input([
-            attribute.type_("submit"),
-            attribute.value(case route {
-              Signup -> "Sign up"
-              Login -> "Login"
-            }),
-            attribute.styles([
-              #("margin-top", "1rem"),
-              #("padding", "0.6rem 1rem"),
-              #("background-color", "#2563eb"),
-              #("color", "white"),
-              #("font-weight", "600"),
-              #("border", "none"),
-              #("border-radius", "6px"),
-              #("cursor", "pointer"),
-              #("width", "100%"),
+  html.div(
+    [
+      attribute.class(
+        "w-full max-w-md bg-white rounded-lg shadow p-6 flex flex-col gap-6",
+      ),
+    ],
+    [
+      auth_mode_toggle(route),
+      html.form(
+        [
+          // prevents default submission and collects field values
+          event.on_submit(fn(fields) {
+            form
+            |> form.add_values(fields)
+            |> form.run
+            |> UserSubmittedAuthInput
+          }),
+        ],
+        [
+          element.fragment(fields),
+          case error_text {
+            Some(error_text) -> auth_page_error_box(error_text)
+            None -> element.none()
+          },
+          html.div([], [
+            html.input([
+              attribute.type_("submit"),
+              attribute.value(case route {
+                Signup -> "Sign up"
+                Login -> "Login"
+              }),
+              attribute.styles([
+                #("margin-top", "1rem"),
+                #("padding", "0.6rem 1rem"),
+                #("background-color", "#2563eb"),
+                #("color", "white"),
+                #("font-weight", "600"),
+                #("border", "none"),
+                #("border-radius", "6px"),
+                #("cursor", "pointer"),
+                #("width", "100%"),
+              ]),
             ]),
           ]),
-        ]),
-      ],
-    ),
-  ])
+        ],
+      ),
+    ],
+  )
 }
 
 fn auth_page_error_box(error_text: String) -> Element(Msg) {

@@ -6,13 +6,7 @@ import server/database
 import server/sql
 
 pub type User {
-  User(
-    id: Int,
-    email: String,
-    username: String,
-    created_at: Timestamp,
-    updated_at: Timestamp,
-  )
+  User(id: Int, email: String, username: String)
 }
 
 pub fn to_json(user: User) -> Json {
@@ -35,31 +29,13 @@ pub fn insert(
 pub fn from_select_user_by_username_row(
   row: sql.SelectUserByUsernameRow,
 ) -> User {
-  User(
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  )
+  User(id: row.id, email: row.email, username: row.username)
 }
 
 pub fn from_select_user_by_session_row(row: sql.SelectUserBySessionRow) -> User {
-  User(
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  )
+  User(id: row.id, email: row.email, username: row.username)
 }
 
 pub fn from_insert_user_row(row: sql.InsertUserRow) -> User {
-  User(
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  )
+  User(id: row.id, email: row.email, username: row.username)
 }

@@ -59,13 +59,7 @@ VALUES ($1, $2, $3)"
 /// > [squirrel package](https://github.com/giacomocavalieri/squirrel).
 ///
 pub type InsertUserRow {
-  InsertUserRow(
-    id: Int,
-    email: String,
-    username: String,
-    created_at: Timestamp,
-    updated_at: Timestamp,
-  )
+  InsertUserRow(id: Int, email: String, username: String)
 }
 
 /// Runs the `insert_user` query
@@ -84,20 +78,12 @@ pub fn insert_user(
     use id <- decode.field(0, decode.int)
     use email <- decode.field(1, decode.string)
     use username <- decode.field(2, decode.string)
-    use created_at <- decode.field(3, pog.timestamp_decoder())
-    use updated_at <- decode.field(4, pog.timestamp_decoder())
-    decode.success(InsertUserRow(
-      id:,
-      email:,
-      username:,
-      created_at:,
-      updated_at:,
-    ))
+    decode.success(InsertUserRow(id:, email:, username:))
   }
 
   "insert into users(email, username, password_hash)
 values ($1, $2, $3)
-returning id, email, username, created_at, updated_at"
+returning id, email, username"
   |> pog.query
   |> pog.parameter(pog.text(arg_1))
   |> pog.parameter(pog.text(arg_2))
@@ -113,13 +99,7 @@ returning id, email, username, created_at, updated_at"
 /// > [squirrel package](https://github.com/giacomocavalieri/squirrel).
 ///
 pub type SelectUserBySessionRow {
-  SelectUserBySessionRow(
-    id: Int,
-    email: String,
-    username: String,
-    created_at: Timestamp,
-    updated_at: Timestamp,
-  )
+  SelectUserBySessionRow(id: Int, email: String, username: String)
 }
 
 /// Runs the `select_user_by_session` query
@@ -137,18 +117,10 @@ pub fn select_user_by_session(
     use id <- decode.field(0, decode.int)
     use email <- decode.field(1, decode.string)
     use username <- decode.field(2, decode.string)
-    use created_at <- decode.field(3, pog.timestamp_decoder())
-    use updated_at <- decode.field(4, pog.timestamp_decoder())
-    decode.success(SelectUserBySessionRow(
-      id:,
-      email:,
-      username:,
-      created_at:,
-      updated_at:,
-    ))
+    decode.success(SelectUserBySessionRow(id:, email:, username:))
   }
 
-  "SELECT u.id, u.email, u.username, u.created_at, u.updated_at
+  "SELECT u.id, u.email, u.username
 FROM sessions session
 JOIN users u ON session.user_id = u.id
 WHERE session.token_hash = $1
@@ -172,8 +144,6 @@ pub type SelectUserByUsernameRow {
     email: String,
     password_hash: String,
     username: String,
-    created_at: Timestamp,
-    updated_at: Timestamp,
   )
 }
 
@@ -192,19 +162,15 @@ pub fn select_user_by_username(
     use email <- decode.field(1, decode.string)
     use password_hash <- decode.field(2, decode.string)
     use username <- decode.field(3, decode.string)
-    use created_at <- decode.field(4, pog.timestamp_decoder())
-    use updated_at <- decode.field(5, pog.timestamp_decoder())
     decode.success(SelectUserByUsernameRow(
       id:,
       email:,
       password_hash:,
       username:,
-      created_at:,
-      updated_at:,
     ))
   }
 
-  "SELECT u.id, u.email, u.password_hash, u.username, u.created_at, u.updated_at
+  "SELECT u.id, u.email, u.password_hash, u.username
 FROM users u
 WHERE u.username = $1;"
   |> pog.query

@@ -128,7 +128,7 @@ fn login(request: wisp.Request, ctx: Context) -> wisp.Response {
       user
       |> user.to_json
       |> json.to_string
-      |> wisp.json_response(201)
+      |> wisp.json_response(200)
       |> wisp.set_cookie(
         request,
         name: "session",

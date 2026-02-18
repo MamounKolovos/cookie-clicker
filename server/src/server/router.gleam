@@ -5,6 +5,7 @@ import gleam/bit_array
 import gleam/crypto
 import gleam/dynamic/decode
 import gleam/float
+import gleam/int
 import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{None, Some}
@@ -33,8 +34,39 @@ pub fn handle_request(request: Request, ctx: Context) -> Response {
     ["api", "signup"] -> signup(request, ctx)
     ["api", "login"] -> login(request, ctx)
     ["api", "me"] -> me(request, ctx)
+    ["api", "board"] -> board(request, ctx)
     _ -> wisp.not_found()
   }
+}
+
+pub type Snapshot {
+  Snapshot(color_indexes: BitArray, width: Int, height: Int)
+}
+
+fn snapshot_to_json(snapshot: Snapshot) -> Json {
+  let Snapshot(color_indexes:, width:, height:) = snapshot
+  json.object([
+    #(
+      "color_indexes",
+      color_indexes |> bit_array.base64_encode(True) |> json.string,
+    ),
+    #("width", json.int(width)),
+    #("height", json.int(height)),
+  ])
+}
+
+fn board(request: wisp.Request, ctx: Context) -> wisp.Response {
+  let color_indexes =
+    list.range(0, 999_999)
+    |> list.map(fn(_) { int.random(16) })
+    |> list.fold(from: <<>>, with: fn(acc, n) { <<acc:bits, n:4>> })
+  let width = 1000
+  let height = 1000
+
+  Snapshot(color_indexes:, width:, height:)
+  |> snapshot_to_json
+  |> json.to_string
+  |> wisp.json_response(200)
 }
 
 fn me(request: wisp.Request, ctx: Context) -> wisp.Response {

@@ -8,6 +8,7 @@ pub type Route {
   Signup
   Login
   Profile
+  Play
   NotFound(uri: Uri)
 }
 
@@ -23,6 +24,7 @@ pub fn parse(uri: Uri) -> Route {
     ["signup"] -> Signup
     ["login"] -> Login
     ["profile"] -> Profile
+    ["play"] -> Play
     _ -> NotFound(uri:)
   }
 }
@@ -40,6 +42,16 @@ fn to_path(route: Route) -> String {
     Signup -> "/signup"
     Login -> "/login"
     Profile -> "/profile"
+    Play -> "/play"
     NotFound(_) -> "/not-found"
+  }
+}
+
+/// Play is public for development purposes
+/// should be protected by release time
+pub fn is_protected(route: Route) -> Bool {
+  case route {
+    Profile -> True
+    Signup | Login | NotFound(uri: _) | Play -> False
   }
 }

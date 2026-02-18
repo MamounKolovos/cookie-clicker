@@ -1,6 +1,7 @@
 import api_error.{ApiError}
 import client/login
 import client/network
+import client/play
 import client/profile
 import client/router.{type Route}
 import client/session.{type Session}
@@ -27,6 +28,7 @@ type Page {
   Signup(signup.Model)
   Login(login.Model)
   Profile(profile.Model)
+  Play(play.Model)
 }
 
 type Msg {
@@ -34,6 +36,7 @@ type Msg {
   SignupMsg(signup.Msg)
   LoginMsg(login.Msg)
   ProfileMsg(profile.Msg)
+  PlayMsg(play.Msg)
   SessionValidated(Result(User, network.Error))
 }
 
@@ -50,14 +53,17 @@ fn init(_args) -> #(Model, Effect(Msg)) {
 }
 
 fn load_route(session: Session, route: Route) -> #(Model, Effect(Msg)) {
+  let is_protected = router.is_protected(route)
+
   // where are we allowed to go?
   let #(route, route_effect) = case session, route {
-    session.LoggedOut, router.Profile -> #(router.Login, effect.none())
-    session.LoggedIn(_), router.Signup -> #(router.Profile, effect.none())
-    session.LoggedIn(_), router.Login -> #(router.Profile, effect.none())
-    // ideally re-route off of signup/login if client has a valid session token
     session.Unknown, route -> #(route, resolve_session())
-
+    // cannot visit auth routes if you're already logged in
+    session.LoggedIn(_), router.Signup | session.LoggedIn(_), router.Login -> #(
+      router.Profile,
+      effect.none(),
+    )
+    session.LoggedOut, _ if is_protected -> #(router.Login, effect.none())
     _, route -> #(route, effect.none())
   }
 
@@ -77,6 +83,11 @@ fn load_route(session: Session, route: Route) -> #(Model, Effect(Msg)) {
       let #(page_model, page_effect) = profile.init()
 
       #(Profile(page_model), page_effect |> effect.map(ProfileMsg))
+    }
+    router.Play -> {
+      let #(page_model, page_effect) = play.init()
+
+      #(Play(page_model), page_effect |> effect.map(PlayMsg))
     }
     router.NotFound(uri:) -> todo
   }
@@ -124,8 +135,16 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         effect |> effect.map(ProfileMsg),
       )
     }
-    Model(session: session.Unknown, route: _, page: _), SessionValidated(result)
-    ->
+    Model(session:, route: router.Play, page: Play(page_model)), PlayMsg(msg) -> {
+      let #(session, page_model, effect) = play.update(session, page_model, msg)
+
+      #(
+        Model(..model, session:, page: Play(page_model)),
+        effect |> effect.map(PlayMsg),
+      )
+    }
+    Model(session: session.Unknown, route:, page: _), SessionValidated(result) -> {
+      let is_protected = router.is_protected(route)
       case result {
         Ok(user) -> #(
           Model(..model, session: session.login(user)),
@@ -134,12 +153,15 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         Error(network.ApiFailure(ApiError(
           code: api_error.Unauthenticated,
           message: _,
-        ))) -> #(
+        )))
+          if is_protected
+        -> #(
           Model(..model, session: session.logout()),
           router.push(router.Login),
         )
         Error(_) -> #(Model(..model, session: session.logout()), effect.none())
       }
+    }
     model, _ -> #(model, effect.none())
   }
 }
@@ -152,6 +174,8 @@ fn view(model: Model) -> Element(Msg) {
       login.view(model) |> element.map(LoginMsg)
     Model(session:, route: router.Profile, page: Profile(model)) ->
       profile.view(session, model) |> element.map(ProfileMsg)
+    Model(session: _, route: router.Play, page: Play(model)) ->
+      play.view(model) |> element.map(PlayMsg)
     _ -> html.text("not found")
   }
 }

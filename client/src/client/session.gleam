@@ -1,4 +1,4 @@
-import client/user.{type User}
+import client/data/user.{type User}
 
 pub type Session {
   /// initial state on page reload

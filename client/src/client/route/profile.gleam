@@ -1,6 +1,6 @@
+import client/data/user.{type User}
 import client/network
 import client/session.{type Session}
-import client/user.{type User}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 

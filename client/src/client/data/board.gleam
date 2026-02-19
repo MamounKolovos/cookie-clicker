@@ -15,7 +15,7 @@ pub fn draw_board(board: Board) -> Effect(msg) {
   do_draw_board(board.ctx, color_indexes, width, height)
 }
 
-@external(javascript, "./canvas_ffi.mjs", "drawBoard")
+@external(javascript, "./board_ffi.mjs", "drawBoard")
 fn do_draw_board(
   ctx: Context,
   color_indexes: BitArray,
@@ -39,7 +39,7 @@ pub fn load_canvas_and_context(
   to_msg(canvas, ctx) |> dispatch
 }
 
-@external(javascript, "./canvas_ffi.mjs", "getCanvasAndContext")
+@external(javascript, "./board_ffi.mjs", "getCanvasAndContext")
 fn do_load_canvas_and_context(canvas_id: String) -> #(Canvas, Context)
 
 pub type Snapshot {

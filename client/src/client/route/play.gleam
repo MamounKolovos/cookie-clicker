@@ -1,4 +1,4 @@
-import client/board.{type Board, Board}
+import client/data/board.{type Board, Board}
 import client/network
 import client/session.{type Session}
 import gleam/option.{type Option, None, Some}

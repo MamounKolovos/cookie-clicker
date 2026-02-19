@@ -1,4 +1,4 @@
-import { BitArray$BitArray } from "../gleam.mjs"
+import { BitArray$BitArray } from "../../gleam.mjs"
 
 /**
  * @param {string} canvas_id

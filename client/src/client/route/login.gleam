@@ -1,7 +1,7 @@
+import client/data/user.{type User}
 import client/network
-import client/router
+import client/route
 import client/session.{type Session}
-import client/user.{type User}
 import formal/form.{type Form}
 import gleam/http
 import gleam/http/request
@@ -26,11 +26,11 @@ pub type Msg {
 }
 
 pub type FormInput {
-  FormInput(email: String, username: String, password: String)
+  FormInput(username: String, password: String)
 }
 
 pub fn init() -> #(Model, Effect(Msg)) {
-  #(Model(form: signup_form(), error_text: None), reset_form("signup-form"))
+  #(Model(form: login_form(), error_text: None), reset_form("login-form"))
 }
 
 fn reset_form(id: String) -> Effect(Msg) {
@@ -38,12 +38,11 @@ fn reset_form(id: String) -> Effect(Msg) {
   do_reset_form(id)
 }
 
-@external(javascript, "../client_ffi.mjs", "resetForm")
+@external(javascript, "../data/form_ffi.mjs", "resetForm")
 fn do_reset_form(id: String) -> Nil
 
-fn signup_form() -> Form(FormInput) {
+fn login_form() -> Form(FormInput) {
   form.new({
-    use email <- form.field("email", form.parse_email)
     use username <- form.field(
       "username",
       form.parse_string |> form.check_not_empty,
@@ -55,12 +54,7 @@ fn signup_form() -> Form(FormInput) {
         |> form.check_string_length_more_than(8),
     )
 
-    use _ <- form.field(
-      "confirm_password",
-      form.parse_string |> form.check_confirms(password),
-    )
-
-    form.success(FormInput(email:, username:, password:))
+    form.success(FormInput(username:, password:))
   })
 }
 
@@ -77,7 +71,7 @@ pub fn update(
       }
     ApiReturnedUser(result) ->
       case result {
-        Ok(user) -> #(session.login(user), model, router.push(router.Profile))
+        Ok(user) -> #(session.login(user), model, route.push(route.Profile))
         Error(network.ApiFailure(ApiError(code: _, message:))) -> #(
           session,
           Model(..model, error_text: Some(message)),
@@ -96,7 +90,7 @@ pub fn update(
 }
 
 fn submit_form(input: FormInput) -> Effect(Msg) {
-  let path = "/api/signup"
+  let path = "/api/login"
   let assert Ok(uri) = rsvp.parse_relative_uri(path)
   let assert Ok(request) = request.from_uri(uri)
   let handler = network.expect_json(user.decoder(), ApiReturnedUser)
@@ -110,7 +104,6 @@ fn submit_form(input: FormInput) -> Effect(Msg) {
 
 pub fn input_to_query(input: FormInput) -> List(#(String, String)) {
   [
-    #("email", input.email),
     #("username", input.username),
     #("password", input.password),
   ]
@@ -124,18 +117,12 @@ pub fn view(model: Model) -> Element(Msg) {
         "min-h-screen flex justify-center items-start bg-gray-50 p-10",
       ),
     ],
-    [signup_view(model)],
+    [login_view(model)],
   )
 }
 
-fn signup_view(model: Model) -> Element(Msg) {
+fn login_view(model: Model) -> Element(Msg) {
   let fields = [
-    form_input_field_view(
-      model.form,
-      name: "email",
-      type_: "email",
-      label: "Email",
-    ),
     form_input_field_view(
       model.form,
       name: "username",
@@ -147,12 +134,6 @@ fn signup_view(model: Model) -> Element(Msg) {
       name: "password",
       type_: "password",
       label: "Password",
-    ),
-    form_input_field_view(
-      model.form,
-      name: "confirm_password",
-      type_: "password",
-      label: "Confirmation",
     ),
   ]
 
@@ -166,7 +147,7 @@ fn signup_view(model: Model) -> Element(Msg) {
       auth_toggle_view(),
       html.form(
         [
-          attribute.id("signup-form"),
+          attribute.id("login-form"),
           // prevents default submission and collects field values
           event.on_submit(fn(fields) {
             model.form
@@ -184,7 +165,7 @@ fn signup_view(model: Model) -> Element(Msg) {
           html.div([], [
             html.input([
               attribute.type_("submit"),
-              attribute.value("Sign up"),
+              attribute.value("Login"),
               attribute.styles([
                 #("margin-top", "1rem"),
                 #("padding", "0.6rem 1rem"),
@@ -226,24 +207,7 @@ fn auth_toggle_view() -> Element(Msg) {
   html.div([attribute.styles([#("display", "flex"), #("gap", "0.5rem")])], [
     html.a(
       [
-        attribute.styles([
-          // forces buttons to take equal width regardless of text
-          #("flex", "1"),
-          #("padding", "0.5rem"),
-          #("border-radius", "0.5rem"),
-          #("text-align", "center"),
-          #("font-weight", "600"),
-          #("background-color", "#ffffff"),
-          #("color", "#000000"),
-          #("cursor", "pointer"),
-          #("border", "1px solid #d1d5db"),
-        ]),
-      ],
-      [element.text("Sign up")],
-    ),
-    html.a(
-      [
-        router.href(router.Login),
+        route.href(route.Signup),
         attribute.styles([
           #("flex", "1"),
           #("padding", "0.5rem"),
@@ -252,6 +216,22 @@ fn auth_toggle_view() -> Element(Msg) {
           #("font-weight", "400"),
           #("background-color", "#f3f4f6"),
           #("color", "#9ca3af"),
+          #("cursor", "pointer"),
+          #("border", "1px solid #d1d5db"),
+        ]),
+      ],
+      [element.text("Sign up")],
+    ),
+    html.a(
+      [
+        attribute.styles([
+          #("flex", "1"),
+          #("padding", "0.5rem"),
+          #("border-radius", "0.5rem"),
+          #("text-align", "center"),
+          #("font-weight", "600"),
+          #("background-color", "#ffffff"),
+          #("color", "#000000"),
           #("cursor", "pointer"),
           #("border", "1px solid #d1d5db"),
         ]),

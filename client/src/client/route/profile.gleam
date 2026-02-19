@@ -26,7 +26,8 @@ pub fn update(
 
 pub fn view(session: Session, model: Model) -> Element(Msg) {
   case session {
-    session.Unknown -> element.text("trying to authenticate, please wait")
+    session.Unknown | session.Pending(on_success: _, on_error: _) ->
+      element.text("trying to authenticate, please wait")
     session.LoggedOut -> element.text("please login to view this page")
     session.LoggedIn(user:) -> element.text("username: " <> user.username)
   }

@@ -41,34 +41,28 @@ type Msg {
 }
 
 fn init(_args) -> #(Model, Effect(Msg)) {
-  let #(model, effect) = load_route(session.unknown(), route.initial_route())
-
-  #(
-    model,
-    effect.batch([
-      effect,
-      modem.init(fn(uri) { uri |> route.parse |> UserNavigatedTo }),
-    ]),
-  )
-}
-
-fn load_route(session: Session, route: Route) -> #(Model, Effect(Msg)) {
+  let route = route.initial_route()
   let is_protected = route.is_protected(route)
 
-  // where are we allowed to go?
-  let #(route, route_effect) = case session, route {
-    session.Unknown, route -> #(route, user.get(SessionValidated))
-    // cannot visit auth routes if you're already logged in
-    session.LoggedIn(_), route.Signup | session.LoggedIn(_), route.Login -> #(
-      route.Profile,
-      effect.none(),
-    )
-    session.LoggedOut, _ if is_protected -> #(route.Login, effect.none())
-    _, route -> #(route, effect.none())
+  let configure_router =
+    modem.init(fn(uri) { uri |> route.parse |> UserNavigatedTo })
+  let get_user = user.get(SessionValidated)
+
+  let session = case route {
+    route.Signup | route.Login ->
+      session.Pending(on_success: route.Profile, on_error: route)
+    route if is_protected ->
+      session.Pending(on_success: route, on_error: route.Login)
+    _ -> session.Unknown
   }
 
-  // what must happen because we're going there?
-  let #(page, page_effect) = case route {
+  let #(page, page_effect) = load_route(route)
+  let effect = effect.batch([configure_router, get_user, page_effect])
+  #(Model(session:, route:, page:), effect)
+}
+
+fn load_route(route: Route) -> #(Page, Effect(Msg)) {
+  case route {
     route.Signup -> {
       let #(page_model, page_effect) = signup.init()
 
@@ -91,13 +85,23 @@ fn load_route(session: Session, route: Route) -> #(Model, Effect(Msg)) {
     }
     route.NotFound(uri:) -> todo
   }
-
-  #(Model(session:, route:, page:), effect.batch([route_effect, page_effect]))
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case model, msg {
-    _, UserNavigatedTo(route) -> load_route(model.session, route)
+    model, UserNavigatedTo(route) -> {
+      let is_protected = route.is_protected(route)
+      let route = case model.session, route {
+        session.LoggedOut, _ if is_protected -> route.Login
+        session.LoggedIn(_), route.Signup | session.LoggedIn(_), route.Login ->
+          route.Profile
+        _, route -> route
+      }
+
+      let #(page, page_effect) = load_route(route)
+
+      #(Model(..model, route:, page:), page_effect)
+    }
     Model(session:, route: route.Signup, page: Signup(page_model)),
       SignupMsg(msg)
     -> {
@@ -137,22 +141,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         effect |> effect.map(PlayMsg),
       )
     }
-    Model(session: session.Unknown, route:, page: _), SessionValidated(result) -> {
-      let is_protected = route.is_protected(route)
+    Model(session: session.Pending(on_success:, on_error:), route: _, page: _),
+      SessionValidated(result)
+    -> {
       case result {
         Ok(user) -> #(
           Model(..model, session: session.login(user)),
-          route.push(route.Profile),
+          route.push(on_success),
         )
-        Error(network.ApiFailure(ApiError(
-          code: api_error.Unauthenticated,
-          message: _,
-        )))
-          if is_protected
-        -> #(Model(..model, session: session.logout()), route.push(route.Login))
-        Error(_) -> #(Model(..model, session: session.logout()), effect.none())
+        Error(_) -> #(
+          Model(..model, session: session.logout()),
+          route.push(on_error),
+        )
       }
     }
+    // guests don't need to be re-routed, just get their session updated passively
+    Model(session: session.Unknown, route: _, page: _), SessionValidated(result)
+    ->
+      case result {
+        Ok(user) -> #(
+          Model(..model, session: session.login(user)),
+          effect.none(),
+        )
+        Error(_) -> #(Model(..model, session: session.logout()), effect.none())
+      }
     model, _ -> #(model, effect.none())
   }
 }

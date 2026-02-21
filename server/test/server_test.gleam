@@ -18,13 +18,6 @@ pub fn main() -> Nil {
   gleeunit.main()
 }
 
-fn global_connection_pool() -> pog.Connection {
-  global_value.create_with_unique_name(
-    "server_test.global_connection_pool",
-    fn() { server.new_conn() },
-  )
-}
-
 fn with_connection(test_case: fn(pog.Connection) -> a) -> Nil {
   let pool = global_connection_pool()
   let assert Error(pog.TransactionRolledBack(Nil)) =
@@ -33,6 +26,19 @@ fn with_connection(test_case: fn(pog.Connection) -> a) -> Nil {
       Error(Nil)
     })
   Nil
+}
+
+fn global_connection_pool() -> pog.Connection {
+  global_value.create_with_unique_name(
+    "server_test.global_connection_pool",
+    fn() { new_pool() },
+  )
+}
+
+fn new_pool() -> pog.Connection {
+  let config = server.pog_config()
+  let assert Ok(_) = pog.start(config)
+  pog.named_connection(config.pool_name)
 }
 
 pub fn signup_with_duplicate_email_test() {
